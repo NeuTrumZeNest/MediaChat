@@ -1,69 +1,630 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { io, Socket } from "socket.io-client";
+
+type User = {
+  id: number;
+  username: string;
+};
+
+type Message = {
+  id: number;
+  author: string;
+  text: string;
+  userId?: number;
+  system?: boolean;
+  createdAt?: string;
+};
+
+const systemMessage: Message = {
+  id: -1,
+  author: "System",
+  text: "Добро пожаловать в ЧАТ",
+  system: true,
+};
+
+function formatMessageDate(value?: string) {
+  if (!value) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
 
 export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+  const router = useRouter();
+
+  const socketRef = useRef<Socket | null>(null);
+
+  const [user, setUser] = useState<User | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  const [connected, setConnected] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const [messages, setMessages] = useState<Message[]>([
+    systemMessage,
+  ]);
+
+  // 1. Проверяем, вошёл ли пользователь
+  useEffect(() => {
+    async function checkSession() {
+      try {
+        const response = await fetch("/api/me", {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          router.replace("/login");
+          return;
+        }
+
+        const data = await response.json();
+
+        setUser(data.user);
+      } catch (error) {
+        console.error(
+          "Ошибка проверки сессии:",
+          error
+        );
+
+        router.replace("/login");
+      } finally {
+        setCheckingSession(false);
+      }
+    }
+
+    checkSession();
+  }, [router]);
+
+  // 2. После входа загружаем историю из PostgreSQL
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    async function loadMessages() {
+      try {
+        const response = await fetch("/api/messages", {
+          cache: "no-store",
+        });
+
+        if (response.status === 401) {
+          router.replace("/login");
+          return;
+        }
+
+        if (!response.ok) {
+          console.error(
+            "Не удалось загрузить историю сообщений"
+          );
+          return;
+        }
+
+        const data = await response.json();
+
+        setMessages([
+          systemMessage,
+          ...data.messages,
+        ]);
+      } catch (error) {
+        console.error(
+          "Ошибка загрузки истории сообщений:",
+          error
+        );
+      }
+    }
+
+    loadMessages();
+  }, [user, router]);
+
+  // 3. После определения пользователя подключаем Socket.IO
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const socket = io(window.location.origin, {
+      transports: ["polling"],
+      upgrade: false,
+    });
+
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      console.log(
+        "Socket.IO подключён:",
+        socket.id
+      );
+
+      setConnected(true);
+    });
+
+    socket.on("disconnect", () => {
+      setConnected(false);
+    });
+
+    socket.on("connect_error", (error) => {
+      console.error(
+        "Ошибка Socket.IO:",
+        error.message
+      );
+
+      setConnected(false);
+
+      if (
+        error.message ===
+          "Необходимо войти в аккаунт" ||
+        error.message ===
+          "Недействительная или истёкшая сессия"
+      ) {
+        router.replace("/login");
+      }
+    });
+
+    socket.on(
+      "chat-message",
+      (newMessage: Message) => {
+        setMessages((oldMessages) => [
+          ...oldMessages,
+          newMessage,
+        ]);
+      }
+    );
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [user, router]);
+
+  function sendMessage() {
+    const socket = socketRef.current;
+    const text = message.trim();
+
+    if (
+      !socket ||
+      !socket.connected ||
+      !user ||
+      !text
+    ) {
+      return;
+    }
+
+    // Сразу показываем своё сообщение у себя.
+    // Сервер самостоятельно определит автора по cookie.
+    const localMessage: Message = {
+      id: Date.now(),
+      author: user.username,
+      userId: user.id,
+      text,
+      createdAt: new Date().toISOString(),
+    };
+
+    setMessages((oldMessages) => [
+      ...oldMessages,
+      localMessage,
+    ]);
+
+    socket.emit("chat-message", {
+      text,
+    });
+
+    setMessage("");
+  }
+
+  async function logout() {
+    try {
+      await fetch("/api/logout", {
+        method: "POST",
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка выхода:",
+        error
+      );
+    } finally {
+      socketRef.current?.disconnect();
+
+      router.replace("/login");
+      router.refresh();
+    }
+  }
+
+  if (checkingSession) {
+    return (
+      <main
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "#0d1015",
+          color: "white",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          fontFamily: "Arial, sans-serif",
+        }}
+      >
+        Проверка сессии...
       </main>
-    </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <main
+      style={{
+        position: "fixed",
+        inset: 0,
+        display: "flex",
+        background: "#0d1015",
+        color: "white",
+        fontFamily: "Arial, sans-serif",
+      }}
+    >
+      {/* Левая панель */}
+      <aside
+        style={{
+          width: "250px",
+          minWidth: "250px",
+          background: "#171a21",
+          borderRight: "1px solid #30343d",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {/* Название */}
+        <div
+          style={{
+            padding: "24px 20px 20px",
+            fontSize: "27px",
+            fontWeight: "700",
+          }}
+        >
+          MediaChat
+        </div>
+
+        {/* Пока только реально работающий раздел */}
+        <div
+          style={{
+            margin: "12px 8px",
+            padding: "12px 14px",
+            borderRadius: "11px",
+            background: "#303646",
+            fontWeight: "600",
+            fontSize: "16px",
+          }}
+        >
+          Общий чат
+        </div>
+
+        <div style={{ flex: 1 }} />
+
+        {/* Профиль */}
+        <div
+          style={{
+            borderTop: "1px solid #30343d",
+            padding: "18px 14px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "11px",
+            }}
+          >
+            <div
+              style={{
+                width: "44px",
+                height: "44px",
+                borderRadius: "50%",
+                background:
+                  "linear-gradient(135deg, #7657f6, #4b36bd)",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                fontWeight: "700",
+                fontSize: "19px",
+                flexShrink: 0,
+              }}
+            >
+              {user.username
+                .charAt(0)
+                .toUpperCase()}
+            </div>
+
+            <div
+              style={{
+                flex: 1,
+                minWidth: 0,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "16px",
+                  fontWeight: "700",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {user.username}
+              </div>
+
+              <div
+                style={{
+                  marginTop: "4px",
+                  fontSize: "14px",
+                  color: connected
+                    ? "#5ee391"
+                    : "#ff6d6d",
+                }}
+              >
+                {connected
+                  ? "В сети"
+                  : "Не в сети"}
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={logout}
+            style={{
+              width: "100%",
+              height: "38px",
+              marginTop: "14px",
+              borderRadius: "9px",
+              border: "1px solid #3b404b",
+              background: "#222630",
+              color: "#d8d8d8",
+              fontSize: "14px",
+              cursor: "pointer",
+            }}
+          >
+            Выйти
+          </button>
+        </div>
+      </aside>
+
+      {/* Основная область */}
+      <section
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {/* Верхняя панель */}
+        <header
+          style={{
+            height: "76px",
+            minHeight: "76px",
+            borderBottom:
+              "1px solid #30343d",
+            background: "#15181f",
+            display: "flex",
+            alignItems: "center",
+            padding: "0 28px",
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: "21px",
+                fontWeight: "700",
+              }}
+            >
+              Общий чат
+            </div>
+
+            <div
+              style={{
+                marginTop: "4px",
+                fontSize: "14px",
+                color: connected
+                  ? "#949ba8"
+                  : "#ff6d6d",
+              }}
+            >
+              {connected
+                ? "Соединение установлено"
+                : "Нет соединения"}
+            </div>
+          </div>
+        </header>
+
+        {/* История сообщений */}
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "30px",
+          }}
+        >
+          {messages.map((item) => {
+            if (item.system) {
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    display: "flex",
+                    justifyContent:
+                      "flex-start",
+                    marginBottom: "22px",
+                  }}
+                >
+                  <div
+                    style={{
+                      background: "#272b36",
+                      padding: "14px 18px",
+                      borderRadius: "20px",
+                      maxWidth: "65%",
+                    }}
+                  >
+                    <div
+                      style={{
+                        color: "#ad91ff",
+                        fontWeight: "700",
+                        fontSize: "14px",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      System
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: "17px",
+                      }}
+                    >
+                      {item.text}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            const isOwnMessage =
+              item.userId === user.id;
+
+            return (
+              <div
+                key={item.id}
+                style={{
+                  display: "flex",
+                  justifyContent:
+                    isOwnMessage
+                      ? "flex-end"
+                      : "flex-start",
+                  marginBottom: "22px",
+                }}
+              >
+                <div
+                  style={{
+                    maxWidth: "65%",
+                    background:
+                      isOwnMessage
+                        ? "#6753dc"
+                        : "#272b36",
+                    padding: "14px 18px",
+                    borderRadius: "20px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: "700",
+                      fontSize: "14px",
+                      marginBottom: "8px",
+                      color: isOwnMessage
+                        ? "#ffffff"
+                        : "#ad91ff",
+                    }}
+                  >
+                    {item.author}
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: "17px",
+                      lineHeight: "1.4",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {item.text}
+                  </div>
+
+                  {item.createdAt && (
+                    <div
+                      style={{
+                        marginTop: "8px",
+                        fontSize: "11px",
+                        opacity: 0.65,
+                        textAlign: "right",
+                      }}
+                    >
+                      {formatMessageDate(item.createdAt)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Поле отправки */}
+        <footer
+          style={{
+            borderTop:
+              "1px solid #30343d",
+            background: "#15181f",
+            padding: "18px 20px",
+            display: "flex",
+            gap: "12px",
+          }}
+        >
+          <input
+            value={message}
+            onChange={(event) =>
+              setMessage(
+                event.target.value
+              )
+            }
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                sendMessage();
+              }
+            }}
+            placeholder="Написать сообщение..."
+            style={{
+              flex: 1,
+              height: "48px",
+              padding: "0 16px",
+              border:
+                "1px solid #3a3f4a",
+              borderRadius: "12px",
+              background: "#222630",
+              color: "white",
+              fontSize: "16px",
+              outline: "none",
+            }}
+          />
+
+          <button
+            onClick={sendMessage}
+            disabled={!connected}
+            title="Отправить"
+            style={{
+              width: "54px",
+              height: "48px",
+              border: "none",
+              borderRadius: "12px",
+              background: connected
+                ? "#6d56ec"
+                : "#343843",
+              color: "white",
+              fontSize: "22px",
+              cursor: connected
+                ? "pointer"
+                : "default",
+            }}
+          >
+            ➤
+          </button>
+        </footer>
+      </section>
+    </main>
   );
 }
