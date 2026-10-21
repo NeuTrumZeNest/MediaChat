@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
         return {
           id: message.id,
           text: message.text,
+          imageUrl: message.imageUrl,
           userId: message.userId,
           author: author?.username ?? "Неизвестный пользователь",
           createdAt: message.createdAt.toString(),

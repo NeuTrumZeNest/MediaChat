@@ -45,3 +45,6 @@ dist/
 .env
 
 *.zip
+/uploads/
+# Local backups
+*.bak

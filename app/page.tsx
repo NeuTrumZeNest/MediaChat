@@ -13,6 +13,7 @@ type Message = {
   id: number;
   author: string;
   text: string;
+  imageUrl?: string | null;
   userId?: number;
   system?: boolean;
   createdAt?: string;
@@ -43,16 +44,51 @@ export default function Home() {
   const router = useRouter();
 
   const socketRef = useRef<Socket | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [user, setUser] = useState<User | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
 
   const [connected, setConnected] = useState(false);
   const [message, setMessage] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState("");
+  const [openedImage, setOpenedImage] = useState<string | null>(null);
 
   const [messages, setMessages] = useState<Message[]>([
     systemMessage,
   ]);
+
+  // Предпросмотр выбранного изображения без отправки на сервер
+  useEffect(() => {
+    if (!imageFile) {
+      setPreviewUrl(null);
+      return;
+    }
+
+    const url = URL.createObjectURL(imageFile);
+    setPreviewUrl(url);
+
+    return () => URL.revokeObjectURL(url);
+  }, [imageFile]);
+
+  useEffect(() => {
+    if (!openedImage) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpenedImage(null);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    }
+  }, [openedImage]);
 
   // 1. Проверяем, вошёл ли пользователь
   useEffect(() => {
@@ -186,7 +222,34 @@ export default function Home() {
     };
   }, [user, router]);
 
-  function sendMessage() {
+  function selectImage(file?: File) {
+    setSendError("");
+
+    if (!file) {
+      return;
+    }
+
+    const allowedTypes = [
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+      "image/gif",
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      setSendError("Выбери PNG, JPG, WebP или GIF.");
+      return;
+    }
+
+    if (file.size === 0 || file.size > 10 * 1024 * 1024) {
+      setSendError("Размер изображения должен быть от 1 байта до 10 МБ.");
+      return;
+    }
+
+    setImageFile(file);
+  }
+
+  async function sendMessage() {
     const socket = socketRef.current;
     const text = message.trim();
 
@@ -194,31 +257,84 @@ export default function Home() {
       !socket ||
       !socket.connected ||
       !user ||
-      !text
+      sending ||
+      (!text && !imageFile)
     ) {
       return;
     }
 
-    // Сразу показываем своё сообщение у себя.
-    // Сервер самостоятельно определит автора по cookie.
-    const localMessage: Message = {
-      id: Date.now(),
-      author: user.username,
-      userId: user.id,
-      text,
-      createdAt: new Date().toISOString(),
-    };
+    setSending(true);
+    setSendError("");
 
-    setMessages((oldMessages) => [
-      ...oldMessages,
-      localMessage,
-    ]);
+    try {
+      let imageUrl: string | null = null;
 
-    socket.emit("chat-message", {
-      text,
-    });
+      if (imageFile) {
+        const formData = new FormData();
+        formData.append("image", imageFile);
 
-    setMessage("");
+        const uploadResponse = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+        const uploadResult = await uploadResponse.json();
+
+        if (!uploadResponse.ok || !uploadResult.imageUrl) {
+          throw new Error(
+            uploadResult.error ?? "Не удалось загрузить изображение"
+          );
+        }
+
+        imageUrl = uploadResult.imageUrl;
+      }
+
+      // Сервер сохраняет сообщение и подтверждает его запись в PostgreSQL.
+      const result = await new Promise<{
+        ok: boolean;
+        error?: string;
+        message?: Message;
+      }>((resolve, reject) => {
+        socket.timeout(15000).emit(
+          "chat-message",
+          { text, imageUrl },
+          (
+            error: Error | null,
+            response: {
+              ok: boolean;
+              error?: string;
+              message?: Message;
+            }
+          ) => {
+            if (error) {
+              reject(new Error("Сервер не подтвердил отправку. Проверь соединение."));
+            } else {
+              resolve(response);
+            }
+          }
+        );
+      });
+
+      if (!result.ok || !result.message) {
+        throw new Error(result.error ?? "Не удалось отправить сообщение");
+      }
+
+      // Избегаем локальных дубликатов; другим клиентам сообщение придёт через Socket.IO.
+      const saved = result.message;
+      setMessages((oldMessages) =>
+        oldMessages.some((item) => item.id === saved.id)
+          ? oldMessages
+          : [...oldMessages, saved]
+      );
+      setMessage("");
+      setImageFile(null);
+    } catch (error) {
+      console.error("Ошибка отправки сообщения:", error);
+      setSendError(
+        error instanceof Error ? error.message : "Не удалось отправить сообщение"
+      );
+    } finally {
+      setSending(false);
+    }
   }
 
   async function logout() {
@@ -499,6 +615,8 @@ export default function Home() {
 
             const isOwnMessage =
               item.userId === user.id;
+              const hasImage = Boolean(item.imageUrl);
+              const isImageOnly =hasImage && !item.text;
 
             return (
               <div
@@ -515,12 +633,13 @@ export default function Home() {
                 <div
                   style={{
                     maxWidth: "65%",
-                    background:
-                      isOwnMessage
+                    background: isImageOnly
+                      ? "transparent"
+                      : isOwnMessage
                         ? "#6753dc"
                         : "#272b36",
-                    padding: "14px 18px",
-                    borderRadius: "20px",
+                    padding: isImageOnly ? "0" : "14px 18px",
+                    borderRadius: isImageOnly ? "16px" : "20px",
                   }}
                 >
                   <div
@@ -536,15 +655,50 @@ export default function Home() {
                     {item.author}
                   </div>
 
-                  <div
-                    style={{
-                      fontSize: "17px",
-                      lineHeight: "1.4",
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    {item.text}
-                  </div>
+                  {item.text && (
+                    <div
+                      style={{
+                        fontSize: "17px",
+                        lineHeight: "1.4",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {item.text}
+                    </div>
+                  )}
+
+                  {item.imageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setOpenedImage(item.imageUrl ?? null)}
+                      title="Открыть изображение"
+                      style={{
+                        display: "block",
+                        padding: 0,
+                        border: "none",
+                        background: "transparent",
+                        marginTop: item.text ? "8px" : "0",
+                        cursor: "zoom-in",
+                      }}
+                    >
+                      {/* Используем адрес защищённого API с cookie-сессией. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={item.imageUrl}
+                      alt="Изображение в сообщении"
+                      style={{
+                        display: "block",
+                        width: "auto",
+                        maxWidth: "100%",
+                        maxHeight: "340px",
+                        borderRadius: "14px",
+                        objectFit: "contain",
+                        border: "1px solid rgba(255, 255, 255, 0.18)",
+                        background: "#11151d",
+                      }}
+                      />
+                    </button>
+                  )}
 
                   {item.createdAt && (
                     <div
@@ -564,67 +718,217 @@ export default function Home() {
           })}
         </div>
 
-        {/* Поле отправки */}
+        {/* Поле отправки: текст, выбор картинки и предпросмотр */}
         <footer
           style={{
-            borderTop:
-              "1px solid #30343d",
+            borderTop: "1px solid #30343d",
             background: "#15181f",
-            padding: "18px 20px",
+            padding: "14px 20px",
             display: "flex",
-            gap: "12px",
+            flexDirection: "column",
+            gap: "10px",
           }}
         >
-          <input
-            value={message}
-            onChange={(event) =>
-              setMessage(
-                event.target.value
-              )
-            }
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                sendMessage();
-              }
-            }}
-            placeholder="Написать сообщение..."
-            style={{
-              flex: 1,
-              height: "48px",
-              padding: "0 16px",
-              border:
-                "1px solid #3a3f4a",
-              borderRadius: "12px",
-              background: "#222630",
-              color: "white",
-              fontSize: "16px",
-              outline: "none",
-            }}
-          />
+          {previewUrl && imageFile && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                padding: "8px 12px",
+                borderRadius: "12px",
+                background: "#222630",
+                maxWidth: "100%",
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewUrl}
+                alt="Предпросмотр перед отправкой"
+                style={{ width: "70px", height: "70px", objectFit: "contain" }}
+              />
+              <span style={{ fontSize: "13px", wordBreak: "break-word", flex: 1 }}>
+                {imageFile.name}
+              </span>
+              <button
+                type="button"
+                onClick={() => setImageFile(null)}
+                disabled={sending}
+                title="Убрать вложение"
+                style={{
+                  background: "transparent",
+                  color: "white",
+                  border: "none",
+                  cursor: sending ? "default" : "pointer",
+                  fontSize: "22px",
+                }}
+              >
+                ×
+              </button>
+            </div>
+          )}
 
-          <button
-            onClick={sendMessage}
-            disabled={!connected}
-            title="Отправить"
-            style={{
-              width: "54px",
-              height: "48px",
-              border: "none",
-              borderRadius: "12px",
-              background: connected
-                ? "#6d56ec"
-                : "#343843",
-              color: "white",
-              fontSize: "22px",
-              cursor: connected
-                ? "pointer"
-                : "default",
-            }}
-          >
-            ➤
-          </button>
+          {sendError && (
+            <div role="alert" style={{ color: "#ff8585", fontSize: "13px" }}>
+              {sendError}
+            </div>
+          )}
+
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif"
+              style={{ display: "none" }}
+              onChange={(event) => {
+                selectImage(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
+
+            <button
+              type="button"
+              title="Прикрепить изображение"
+              aria-label="Прикрепить изображение"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!connected || sending}
+              style={{
+                width: "48px",
+                height: "48px",
+                flexShrink: 0,
+                border: "1px solid #3a3f4a",
+                borderRadius: "12px",
+                background: "#222630",
+                color: "white",
+                fontSize: "23px",
+                cursor: connected && !sending ? "pointer" : "default",
+              }}
+            >
+              📎
+            </button>
+
+            <input
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  sendMessage();
+                }
+              }}
+              disabled={sending}
+              placeholder="Написать сообщение..."
+              style={{
+                flex: 1,
+                minWidth: 0,
+                height: "48px",
+                padding: "0 16px",
+                border: "1px solid #3a3f4a",
+                borderRadius: "12px",
+                background: "#222630",
+                color: "white",
+                fontSize: "16px",
+                outline: "none",
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={sendMessage}
+              disabled={!connected || sending || (!message.trim() && !imageFile)}
+              title="Отправить"
+              style={{
+                width: "54px",
+                height: "48px",
+                flexShrink: 0,
+                border: "none",
+                borderRadius: "12px",
+                background: connected && !sending ? "#6d56ec" : "#343843",
+                color: "white",
+                fontSize: "22px",
+                cursor: connected && !sending ? "pointer" : "default",
+              }}
+            >
+              {sending ? "…" : "➤"}
+            </button>
+          </div>
         </footer>
       </section>
+      {openedImage && (
+  <>
+    <style>{`
+      @keyframes viewerFade {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+
+      @keyframes viewerZoom {
+        from {
+          opacity: 0;
+          transform: scale(0.94);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .viewer-overlay, .viewer-image {
+          animation: none !important;
+        }
+      }
+    `}</style>
+
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Просмотр изображения"
+      className="viewer-overlay"
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0, 0, 0, 0.9)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "24px",
+        zIndex: 1000,
+        animation: "viewerFade 200ms ease-out",
+      }}
+    >
+      <button
+        type="button"
+        aria-label="Закрыть просмотр"
+        onClick={() => setOpenedImage(null)}
+        style={{
+          position: "absolute",
+          inset: 0,
+          border: "none",
+          background: "transparent",
+          cursor: "zoom-out",
+        }}
+      />
+
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={openedImage}
+        alt="Открытое изображение"
+        className="viewer-image"
+        style={{
+          position: "relative",
+          maxWidth: "100%",
+          maxHeight: "90vh",
+          objectFit: "contain",
+          borderRadius: "12px",
+          animation: "viewerZoom 240ms ease-out",
+          pointerEvents: "none",
+        }}
+      />
+
+
+    </div>
+  </>
+)}
     </main>
   );
 }
