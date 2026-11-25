@@ -1,0 +1,9 @@
+.draft { min-width: 0; padding: 8px; background: #222630; border-radius: 12px; }
+.summary { color: #b9b2d7; font-size: 12px; padding: 2px 4px 8px; }
+.list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 190px; overflow-y: auto; }
+.item { display: flex; align-items: center; gap: 8px; padding: 6px; background: #2a2d39; border-radius: 8px; min-width: 0; flex: 1 1 200px; }
+.item img, .item video { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; background: #161922; }
+.name { flex: 1; min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
+.name small { display: block; color: #aaa8b9; font-size: 11px; margin-top: 3px; }
+.item button { border: 0; background: transparent; color: white; padding: 5px; cursor: pointer; }
+.item button:disabled { opacity: .4; cursor: default; }

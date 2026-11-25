@@ -1,0 +1,128 @@
+[
+  {
+    "id": "column.public.message.clientMessageId",
+    "label": "Add column \"clientMessageId\" to \"message\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "clientMessageId",
+        "table": "message"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"clientMessageId\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "message",
+          "clientMessageId"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"clientMessageId\"",
+        "sql": "ALTER TABLE \"public\".\"message\" ADD COLUMN \"clientMessageId\" text"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"clientMessageId\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "message",
+          "clientMessageId"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.message.documentUrl",
+    "label": "Add column \"documentUrl\" to \"message\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "documentUrl",
+        "table": "message"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"documentUrl\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "message",
+          "documentUrl"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"documentUrl\"",
+        "sql": "ALTER TABLE \"public\".\"message\" ADD COLUMN \"documentUrl\" text"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"documentUrl\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "message",
+          "documentUrl"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.message.message_clientMessageId_key",
+    "label": "Add unique constraint on \"message\" (clientMessageId)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "message_clientMessageId_key",
+        "table": "message"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"message_clientMessageId_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "message_clientMessageId_key",
+          "public",
+          "\"public\".\"message\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"message_clientMessageId_key\"",
+        "sql": "ALTER TABLE \"public\".\"message\" ADD CONSTRAINT \"message_clientMessageId_key\" UNIQUE (\"clientMessageId\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"message_clientMessageId_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "message_clientMessageId_key",
+          "public",
+          "\"public\".\"message\""
+        ]
+      }
+    ]
+  }
+]

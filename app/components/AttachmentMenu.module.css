@@ -1,0 +1,9 @@
+.container { position: relative; flex-shrink: 0; }
+.trigger { display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 1px solid #3a3f4a; border-radius: 12px; background: #222630; color: #e6e3f0; cursor: pointer; }
+.trigger:hover, .trigger[aria-expanded="true"] { background: #303044; color: #ad91ff; }
+.trigger:disabled { opacity: .45; cursor: default; }
+.trigger:focus-visible, .menu button:focus-visible { outline: 2px solid #ad91ff; outline-offset: 2px; }
+.menu { position: absolute; z-index: 30; bottom: calc(100% + 10px); left: 0; width: 220px; max-width: calc(100vw - 32px); padding: 6px; border: 1px solid #3a3f4a; border-radius: 14px; background: #222630; box-shadow: 0 8px 28px #00000040; }
+.menu button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 10px 12px; border: 0; border-radius: 9px; background: transparent; color: #f5f5f7; text-align: left; font-size: 14px; cursor: pointer; }
+.menu button svg { flex-shrink: 0; color: #ad91ff; }
+.menu button:hover, .menu button:focus-visible { background: #6753dc26; }

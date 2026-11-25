@@ -1,0 +1,83 @@
+[
+  {
+    "id": "column.public.message.videoUrl",
+    "label": "Add column \"videoUrl\" to \"message\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "videoUrl",
+        "table": "message"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"videoUrl\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "message",
+          "videoUrl"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"videoUrl\"",
+        "sql": "ALTER TABLE \"public\".\"message\" ADD COLUMN \"videoUrl\" text"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"videoUrl\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "message",
+          "videoUrl"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.message.message_videoUrl_idx_c4d39b7f",
+    "label": "Create index \"message_videoUrl_idx_c4d39b7f\" on \"message\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "message_videoUrl_idx_c4d39b7f",
+        "table": "message"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"message_videoUrl_idx_c4d39b7f\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"message_videoUrl_idx_c4d39b7f\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"message_videoUrl_idx_c4d39b7f\"",
+        "sql": "CREATE INDEX \"message_videoUrl_idx_c4d39b7f\" ON \"public\".\"message\" (\"videoUrl\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"message_videoUrl_idx_c4d39b7f\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"message_videoUrl_idx_c4d39b7f\""
+        ]
+      }
+    ]
+  }
+]

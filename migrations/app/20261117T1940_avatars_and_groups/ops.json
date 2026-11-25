@@ -1,0 +1,254 @@
+[
+  {
+    "id": "column.public.conversation.avatarUrl",
+    "label": "Add column \"avatarUrl\" to \"conversation\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "avatarUrl",
+        "table": "conversation"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"avatarUrl\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "conversation",
+          "avatarUrl"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"avatarUrl\"",
+        "sql": "ALTER TABLE \"public\".\"conversation\" ADD COLUMN \"avatarUrl\" text"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"avatarUrl\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "conversation",
+          "avatarUrl"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.conversation.deletedAt",
+    "label": "Add column \"deletedAt\" to \"conversation\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "deletedAt",
+        "table": "conversation"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"deletedAt\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "conversation",
+          "deletedAt"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"deletedAt\"",
+        "sql": "ALTER TABLE \"public\".\"conversation\" ADD COLUMN \"deletedAt\" timestamptz"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"deletedAt\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "conversation",
+          "deletedAt"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.conversation.kind",
+    "label": "Add column \"kind\" to \"conversation\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "kind",
+        "table": "conversation"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"kind\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "conversation",
+          "kind"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"kind\"",
+        "sql": "ALTER TABLE \"public\".\"conversation\" ADD COLUMN \"kind\" text DEFAULT 'direct' NOT NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"kind\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "conversation",
+          "kind"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.conversation.title",
+    "label": "Add column \"title\" to \"conversation\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "title",
+        "table": "conversation"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"title\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "conversation",
+          "title"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"title\"",
+        "sql": "ALTER TABLE \"public\".\"conversation\" ADD COLUMN \"title\" text"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"title\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "conversation",
+          "title"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.conversationMember.role",
+    "label": "Add column \"role\" to \"conversationMember\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "role",
+        "table": "conversationMember"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"role\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "conversationMember",
+          "role"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"role\"",
+        "sql": "ALTER TABLE \"public\".\"conversationMember\" ADD COLUMN \"role\" text DEFAULT 'member' NOT NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"role\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "conversationMember",
+          "role"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.user.avatarUrl",
+    "label": "Add column \"avatarUrl\" to \"user\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "avatarUrl",
+        "table": "user"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"avatarUrl\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "user",
+          "avatarUrl"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"avatarUrl\"",
+        "sql": "ALTER TABLE \"public\".\"user\" ADD COLUMN \"avatarUrl\" text"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"avatarUrl\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "user",
+          "avatarUrl"
+        ]
+      }
+    ]
+  }
+]

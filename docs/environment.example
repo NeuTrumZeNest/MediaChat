@@ -1,0 +1,13 @@
+# Шаблон без настоящих секретов. Скопируйте значения в локальный .env и замените placeholders.
+DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/mediachat
+SESSION_SECRET=REPLACE_WITH_RANDOM_SECRET_FROM_openssl_rand_base64_48
+APP_ORIGIN=http://localhost:3000
+PORT=3000
+
+# Для видео обязательны FFmpeg и FFprobe в PATH. При необходимости задайте полные пути:
+# FFMPEG_PATH=/usr/local/bin/ffmpeg
+# FFPROBE_PATH=/usr/local/bin/ffprobe
+
+# Optional: false disables scheduled orphan cleanup/startup retries (default enabled).
+# Explicit message deletion still cleans its unused server attachments.
+# MEDIA_CLEANUP_ENABLED=true

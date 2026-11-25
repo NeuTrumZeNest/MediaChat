@@ -8,7 +8,11 @@
     "build": "next build",
     "start": "NODE_ENV=production node server.js",
     "lint": "eslint",
-    "contract:emit": "prisma contract emit"
+    "test": "node --test tests/*.test.ts",
+    "contract:emit": "prisma contract emit",
+    "media:cleanup": "node scripts/cleanup-media.mjs",
+    "build:share": "MEDIA_CHAT_DIST_DIR=.next/groups-release next build --webpack",
+    "share": "MEDIA_CHAT_DIST_DIR=.next/groups-release node scripts/share-mediachat.mjs"
   },
   "dependencies": {
     "@prisma/client": "^7.10.0",
@@ -16,9 +20,11 @@
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
     "jose": "^6.2.12",
+    "lucide-react": "^1.64.0",
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "sharp": "^0.35.5",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "temporal-polyfill": "^1.0.5"

@@ -21,7 +21,8 @@ export async function GET(request: NextRequest) {
 
     const { payload } = await jwtVerify(
       token,
-      new TextEncoder().encode(secret)
+      new TextEncoder().encode(secret),
+      { algorithms: ["HS256"] }
     );
 
     const userId = Number(payload.userId);
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
         user: {
           id: user.id,
           username: user.username,
+          avatarUrl: user.avatarUrl,
         },
       },
       { status: 200 }

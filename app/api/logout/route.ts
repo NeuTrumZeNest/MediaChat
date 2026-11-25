@@ -1,6 +1,8 @@
+import { validMutationOrigin } from '../../../src/lib/request-origin';
 import { NextResponse } from "next/server";
 
-export async function POST() {
+export async function POST(request: Request) {
+  if (!validMutationOrigin(request)) return NextResponse.json({ error: 'Недопустимый источник запроса' }, { status: 403 });
   const response = NextResponse.json({
     message: "Выход выполнен",
   });

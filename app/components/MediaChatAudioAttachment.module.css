@@ -1,0 +1,10 @@
+.attachment { width: 100%; min-width: 0; }
+.card { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; padding: 0; border: 0; border-radius: 14px; background: transparent; color: white; text-align: left; cursor: pointer; }
+.card:hover { background: #ffffff0a; }
+.card:focus-visible { outline: 2px solid #ad91ff; outline-offset: 3px; }
+.icon { display: grid; place-items: center; flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: #ffffff1a; }
+.details { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 8px; }
+.name { min-width: 0; overflow-wrap: anywhere; font-size: 14px; font-weight: 600; }
+.extension { flex-shrink: 0; color: inherit; font-size: 14px; font-weight: 600; }
+.duration { color: #ffffffb3; font-size: 12px; font-variant-numeric: tabular-nums; }

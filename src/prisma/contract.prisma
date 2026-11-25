@@ -1,18 +1,88 @@
+
+// use prisma-8
+
 model User {
-  id           Int       @id @default(autoincrement())
-  username     String    @unique
+  avatarUrl String?
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
   passwordHash String
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime @default(now())
 
   messages     Message[]
+  memberships  ConversationMember[]
 }
 
 model Message {
   id        Int      @id @default(autoincrement())
   text      String
   imageUrl  String?
+  audioUrl String?
+  documentUrl String?
+  videoUrl String?
+  images MessageImage[]
+  clientMessageId String? @unique
   createdAt DateTime @default(now())
+  editedAt DateTime?
+  deletedAt DateTime?
+  replyToId Int?
+  replyTo Message? @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies Message[] @relation("MessageReplies")
 
   userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  conversationId Int?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([conversationId, id])
+  @@index([videoUrl])
+  @@index([replyToId])
+}
+
+model MediaCleanupJob {
+  id Int @id @default(autoincrement())
+  url String @unique
+  ownerId Int
+  createdAt DateTime @default(now())
+  attempts Int @default(0)
+  lastError String?
+}
+
+model MessageImage {
+  id Int @id @default(autoincrement())
+  messageId Int
+  imageUrl String
+  position Int
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, position])
+  @@unique([messageId, imageUrl])
+  @@index([imageUrl])
+}
+
+model Conversation {
+  kind String @default("direct")
+  title String?
+  avatarUrl String?
+  deletedAt DateTime?
+  directKey String? @unique
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+
+  members   ConversationMember[]
+  messages  Message[]
+}
+
+model ConversationMember {
+  id             Int      @id @default(autoincrement())
+  conversationId Int
+  userId         Int
+  joinedAt       DateTime @default(now())
+  role String @default("member")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
 }

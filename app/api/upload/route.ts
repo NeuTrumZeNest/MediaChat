@@ -1,15 +1,32 @@
+import { validMutationOrigin } from "../../../src/lib/request-origin";
+import { MAX_IMAGE_SIZE } from "../../../src/lib/image-types";
+import { InputError, limitedFormData } from "../../../src/lib/request-body";
+
 import { NextRequest, NextResponse } from "next/server";
-import { jwtVerify } from "jose";
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { db } from "../../../src/prisma/db";
+import sharp from "sharp";
+
+import {
+  authorizeImageRequest,
+  imageMimeType,
+  META_DIR,
+  PREVIEW_DIR,
+  safeOriginalName,
+  UPLOAD_DIR,
+  type ImageExtension,
+  type ImageMetadata,
+} from "../../../src/lib/image-storage";
 
 export const runtime = "nodejs";
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_FILE_SIZE = MAX_IMAGE_SIZE;
+const MAX_PIXELS = 40_000_000;
 
-function detectImageType(buffer: Buffer): string | null {
+function detectImageType(
+  buffer: Buffer
+): ImageExtension | null {
   if (
     buffer.length >= 8 &&
     buffer.subarray(0, 8).equals(
@@ -38,86 +55,115 @@ function detectImageType(buffer: Buffer): string | null {
 
   const signature = buffer.toString("ascii", 0, 6);
 
-  if (signature === "GIF87a" || signature === "GIF89a") {
+  if (
+    signature === "GIF87a" ||
+    signature === "GIF89a"
+  ) {
     return "gif";
   }
 
   return null;
 }
 
-export async function POST(request: NextRequest) {
-  const token = request.cookies.get("mediachat_session")?.value;
-  const secret = process.env.SESSION_SECRET;
+async function generatePreview(
+  buffer: Buffer,
+  ext: ImageExtension
+): Promise<Buffer | null> {
+  const input = {
+    limitInputPixels: MAX_PIXELS,
+  };
 
-  if (!secret) {
-    return NextResponse.json(
-      { error: "Ошибка конфигурации сервера" },
-      { status: 500 }
-    );
+  const metadata = await sharp(
+    buffer,
+    input
+  ).metadata();
+
+  const actual =
+    metadata.format === "jpeg"
+      ? "jpg"
+      : metadata.format;
+
+  if (
+    actual !== ext ||
+    !metadata.width ||
+    !metadata.height
+  ) {
+    throw new Error("Неверный формат изображения");
   }
 
-  if (!token) {
-    return NextResponse.json(
-      { error: "Необходимо войти в аккаунт" },
-      { status: 401 }
-    );
+  if (
+    metadata.width * metadata.height > MAX_PIXELS
+  ) {
+    throw new Error("Изображение слишком большое");
   }
 
-  let userId: number;
-
-  try {
-    const { payload } = await jwtVerify(
-      token,
-      new TextEncoder().encode(secret)
-    );
-
-    userId = Number(payload.userId);
-
-    if (!Number.isInteger(userId) || userId <= 0) {
-      throw new Error("Недействительная сессия");
-    }
-  } catch {
-    return NextResponse.json(
-      { error: "Недействительная сессия" },
-      { status: 401 }
-    );
+  // Сохраняем анимацию GIF, WebP и APNG.
+  if (
+    ext === "gif" ||
+    (metadata.pages ?? 1) > 1
+  ) {
+    return null;
   }
 
-  const origin = request.headers.get("origin");
-const host = request.headers.get("host");
+  const pipeline = sharp(buffer, input)
+    .rotate()
+    .resize({
+      width: 960,
+      height: 960,
+      fit: "inside",
+      withoutEnlargement: true,
+    });
 
-if (origin && (!host || new URL(origin).host !== host)) {
-  return NextResponse.json(
-    { error: "Недопустимый источник запроса" },
-    { status: 403 }
-  );
+  const preview =
+    ext === "png"
+      ? await pipeline
+          .webp({
+            lossless: true,
+            effort: 4,
+          })
+          .toBuffer()
+      : await pipeline
+          .webp({
+            quality: 82,
+            effort: 4,
+          })
+          .toBuffer();
+
+  return preview.length < buffer.length
+    ? preview
+    : null;
 }
+
+export async function POST(request: NextRequest) {
+  const auth = await authorizeImageRequest(request);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  if (!validMutationOrigin(request)) return NextResponse.json({ error: 'Недопустимый источник запроса' }, { status: 403 });
 
   const contentLength = Number(
     request.headers.get("content-length") ?? "0"
   );
 
-  if (contentLength > MAX_FILE_SIZE + 1024 * 1024) {
+  if (
+    contentLength > MAX_FILE_SIZE + 1024 * 1024
+  ) {
     return NextResponse.json(
       { error: "Слишком большой запрос" },
       { status: 413 }
     );
   }
 
+  let buffer: Buffer;
+  let extension: ImageExtension;
+  let originalName: string;
+  let preview: Buffer | null;
+
   try {
-    const user = await db.orm.public.User
-      .where({ id: userId })
-      .first();
-
-    if (!user) {
-      return NextResponse.json(
-        { error: "Пользователь не найден" },
-        { status: 401 }
-      );
-    }
-
-    const formData = await request.formData();
-    const image = formData.get("image");
+    const data = await limitedFormData(request, MAX_FILE_SIZE);
+    const image = data.get("image");
 
     if (!(image instanceof File)) {
       return NextResponse.json(
@@ -126,44 +172,168 @@ if (origin && (!host || new URL(origin).host !== host)) {
       );
     }
 
-    if (image.size === 0 || image.size > MAX_FILE_SIZE) {
+    if (
+      image.size === 0 ||
+      image.size > MAX_FILE_SIZE
+    ) {
       return NextResponse.json(
-        { error: "Размер изображения должен быть до 10 МБ" },
+        {
+          error: "Размер изображения должен быть до 25 МБ",
+        },
         { status: 413 }
       );
     }
 
-    const buffer = Buffer.from(await image.arrayBuffer());
-    const extension = detectImageType(buffer);
+    buffer = Buffer.from(
+      await image.arrayBuffer()
+    );
 
-    if (!extension) {
+    const detected = detectImageType(buffer);
+
+    if (!detected) {
       return NextResponse.json(
-        { error: "Поддерживаются PNG, JPG, WebP и GIF" },
+        {
+          error: "Поддерживаются PNG, JPG, WebP и GIF",
+        },
         { status: 415 }
       );
     }
 
-    const uploadDirectory = join(process.cwd(), "uploads");
+    extension = detected;
 
-    await mkdir(uploadDirectory, { recursive: true });
+    originalName = safeOriginalName(
+      image.name,
+      extension
+    );
 
-    const filename = `${randomUUID()}.${extension}`;
+    preview = await generatePreview(
+      buffer,
+      extension
+    );
+  } catch (error) {
+    if (error instanceof InputError) return NextResponse.json({ error: error.message }, { status: error.status });
+    console.error(
+      "Не удалось прочитать/обработать изображение:",
+      error
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          "Повреждённое или неподдерживаемое изображение",
+      },
+      { status: 415 }
+    );
+  }
+
+  const id = randomUUID();
+  const filename = `${id}.${extension}`;
+
+  const originalPath = join(
+    UPLOAD_DIR,
+    filename
+  );
+
+  const metadataPath = join(
+    META_DIR,
+    `${id}.json`
+  );
+
+  const previewPath = join(
+    PREVIEW_DIR,
+    `${id}.webp`
+  );
+
+  const written: string[] = [];
+
+  const metadata: ImageMetadata = {
+    id,
+    ownerId: auth.userId,
+    originalName,
+    extension,
+    mimeType: imageMimeType(extension),
+    size: buffer.length,
+    previewAvailable: preview !== null,
+    UploadedAt: new Date().toISOString(),
+  };
+
+  try {
+    await Promise.all([
+      mkdir(UPLOAD_DIR, {
+        recursive: true,
+      }),
+      mkdir(META_DIR, {
+        recursive: true,
+      }),
+      mkdir(PREVIEW_DIR, {
+        recursive: true,
+      }),
+    ]);
 
     await writeFile(
-      join(uploadDirectory, filename),
+      originalPath,
       buffer,
       { flag: "wx" }
     );
 
+    written.push(originalPath);
+
+    await writeFile(
+      metadataPath,
+      JSON.stringify(metadata, null, 2),
+      { flag: "wx" }
+    );
+
+    written.push(metadataPath);
+
+    if (preview) {
+      await writeFile(
+        previewPath,
+        preview,
+        { flag: "wx" }
+      );
+
+      written.push(previewPath);
+    }
+
+    console.log(
+      "MediaChat upload:",
+      buffer.length,
+      "байт -> превью",
+      preview?.length ?? "не требуется"
+    );
+
     return NextResponse.json(
-      { imageUrl: `/api/images/${filename}` },
+      {
+        imageUrl: `/api/images/${filename}`,
+        previewUrl: preview
+          ? `/api/images/previews/${id}.webp`
+          : `/api/images/${filename}`,
+        originalName,
+        originalSize: buffer.length,
+        previewSize: preview?.length ?? null,
+      },
       { status: 201 }
     );
   } catch (error) {
-    console.error("Ошибка загрузки изображения:", error);
+    if (error instanceof InputError) return NextResponse.json({ error: error.message }, { status: error.status });
+    console.error(
+      "Ошибка сохранения изображения:",
+      error
+    );
+
+    await Promise.all(
+      written.map((path) =>
+        rm(path, { force: true }).catch(
+          () => undefined
+        )
+      )
+    );
 
     return NextResponse.json(
-      { error: "Не удалось загрузить изображение" },
+      {
+        error: "Не удалось сохранить изображение",
+      },
       { status: 500 }
     );
   }

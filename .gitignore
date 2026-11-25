@@ -48,3 +48,9 @@ dist/
 /uploads/
 # Local backups
 *.bak
+# Private database backups
+*.dump
+*.sql
+
+# Public configuration template, never real credentials
+!.env.example

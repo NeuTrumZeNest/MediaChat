@@ -1,118 +1,60 @@
-import { NextRequest, NextResponse } from "next/server";
-import { jwtVerify } from "jose";
-import { readFile } from "node:fs/promises";
+
 import { join } from "node:path";
-import { db } from "../../../../src/prisma/db";
+import { NextRequest, NextResponse } from "next/server";
+
+import {
+  authorizeImageRequest,
+  cachedImageResponse,
+  canReadImage,
+  imageMimeType,
+  isMissingFile,
+  parseImageFilename,
+  UPLOAD_DIR,
+} from "../../../../src/lib/image-storage";
 
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
-const imageTypes: Record<string, string> = {
-  png: "image/png",
-  jpg: "image/jpeg",
-  webp: "image/webp",
-  gif: "image/gif",
-};
 
 export async function GET(
   request: NextRequest,
-  context: {
+  {
+    params,
+  }: {
     params: Promise<{ filename: string }>;
   }
 ) {
-  // Проверяем авторизацию
-  const token = request.cookies.get(
-    "mediachat_session"
-  )?.value;
+  const auth = await authorizeImageRequest(request);
 
-  const secret = process.env.SESSION_SECRET;
-
-  if (!secret) {
-    return NextResponse.json(
-      { error: "Ошибка конфигурации сервера" },
-      { status: 500 }
-    );
+  if (!auth.ok) {
+    return auth.response;
   }
 
-  if (!token) {
+  const { filename } = await params;
+  const parsed = parseImageFilename(filename);
+
+  if (!parsed) {
     return NextResponse.json(
-      { error: "Необходимо войти в аккаунт" },
-      { status: 401 }
-    );
-  }
-
-  try {
-    const { payload } = await jwtVerify(
-      token,
-      new TextEncoder().encode(secret)
-    );
-
-    const userId = Number(payload.userId);
-
-    if (!Number.isInteger(userId) || userId <= 0) {
-      throw new Error("Недействительная сессия");
-    }
-
-    const user = await db.orm.public.User
-      .where({ id: userId })
-      .first();
-
-    if (!user) {
-      throw new Error("Пользователь не найден");
-    }
-  } catch {
-    return NextResponse.json(
-      { error: "Недействительная сессия" },
-      { status: 401 }
-    );
-  }
-
-  // Получаем название изображения
-  const { filename } = await context.params;
-
-  // Разрешаем только имена нашего формата
-  const filenamePattern =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpg|webp|gif)$/;
-
-  if (!filenamePattern.test(filename)) {
-    return NextResponse.json(
-      { error: "Недопустимое имя файла" },
+      { error: "Неверное имя файла" },
       { status: 400 }
     );
   }
 
-  const extension = filename.split(".").pop()!;
-  const contentType = imageTypes[extension];
-
-  const filePath = join(
-    process.cwd(),
-    "uploads",
-    filename
-  );
-
-  // Читаем изображение с диска
   try {
-    const image = await readFile(filePath);
+    if (!(await canReadImage(filename, auth.userId))) {
+      return NextResponse.json(
+        { error: "Изображение недоступно" },
+        { status: 404 }
+      );
+    }
 
-    return new NextResponse(
-      new Uint8Array(image),
-      {
-        status: 200,
-        headers: {
-          "Content-Type": contentType,
-          "Cache-Control": "private, no-store",
-          "X-Content-Type-Options": "nosniff",
-        },
-      }
+    return await cachedImageResponse(
+      request,
+      join(UPLOAD_DIR, filename),
+      imageMimeType(parsed.extension)
     );
   } catch (error) {
-    if (
-      error instanceof Error &&
-      "code" in error &&
-      error.code === "ENOENT"
-    ) {
+    if (isMissingFile(error)) {
       return NextResponse.json(
-        { error: "Изображение не найдено" },
+        { error: "Файл не найден" },
         { status: 404 }
       );
     }
@@ -123,7 +65,7 @@ export async function GET(
     );
 
     return NextResponse.json(
-      { error: "Не удалось открыть изображение" },
+      { error: "Ошибка сервера" },
       { status: 500 }
     );
   }

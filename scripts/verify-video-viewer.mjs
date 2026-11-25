@@ -1,0 +1,157 @@
+// Read-only UI check: browser-only media fixtures, no upload or database writes.
+import 'dotenv/config';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { SignJWT } from 'jose';
+import { db } from '../src/prisma/db.ts';
+import { parseRange } from '../src/lib/http-range.ts';
+const base = process.env.VERIFY_URL || 'http://localhost:3000';
+const root = await mkdtemp(join(tmpdir(), 'mediachat-viewer-'));
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || '/private/tmp/mediachat-video-browser/node_modules/playwright-core/index.mjs');
+let browser;
+let debugPage;
+async function until(check, label) {
+  const start = Date.now();
+  while (Date.now() - start < 15000) { if (await check()) return; await new Promise((resolve) => setTimeout(resolve, 100)); }
+  if (debugPage) {
+    console.log('UI check failure:', label, await debugPage.evaluate(() => ({ focused: document.hasFocus(), fullscreen: document.fullscreenElement?.tagName || null, dialogOpen: document.querySelector('dialog')?.open || false, errors: [...document.querySelectorAll('[role="alert"]')].map((element) => element.textContent) })));
+    await debugPage.screenshot({ path: '/private/tmp/mediachat-viewer-check-failure.png' });
+  }
+  throw new Error(`Timeout: ${label}`);
+}
+try {
+  const path = join(root, 'clip.mp4'), poster = join(root, 'poster.jpg');
+  execFileSync('ffmpeg', ['-nostdin', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=10', '-t', '36', '-c:v', 'libx264', '-preset', 'ultrafast', '-threads', '1', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', path]);
+  execFileSync('ffmpeg', ['-nostdin', '-v', 'error', '-i', path, '-frames:v', '1', poster]);
+  const bytes = await readFile(path), jpeg = await readFile(poster);
+  const user = await db.orm.public.User.select('id').first(); assert(user);
+  const token = await new SignJWT({ userId: user.id }).setProtectedHeader({ alg: 'HS256' }).setExpirationTime('5m').sign(new TextEncoder().encode(process.env.SESSION_SECRET));
+  browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
+  const context = await browser.newContext({ viewport: { width: 1100, height: 850 } });
+  await context.addCookies([{ name: 'mediachat_session', value: token, url: base, httpOnly: true, sameSite: 'Lax' }]);
+  const info = { url: '/__viewer_fixture.mp4', posterUrl: '/__viewer_fixture.jpg', originalName: 'Проверка просмотра.mp4', size: bytes.length, mimeType: 'video/mp4', duration: 36, width: 320, height: 180, videoCodec: 'h264', audioCodec: null };
+  await context.route('**/api/messages', (route) => route.fulfill({ json: { messages: [{ id: 2000000000, author: 'Проверка', userId: user.id, text: '', videoUrl: info.url, video: info, createdAt: new Date().toISOString() }] } }));
+  await context.route('**/__viewer_fixture.jpg', (route) => route.fulfill({ contentType: 'image/jpeg', body: jpeg }));
+  await context.route(/\/__viewer_fixture\.mp4(?:\?.*)?$/, (route) => {
+    const range = parseRange(route.request().headers().range || null, bytes.length);
+    if (!range) return route.fulfill({ status: 416, headers: { 'content-range': `bytes */${bytes.length}` } });
+    return route.fulfill({ status: range.status, headers: { 'content-type': 'video/mp4', 'accept-ranges': 'bytes', ...(range.status === 206 ? { 'content-range': `bytes ${range.start}-${range.end}/${bytes.length}` } : {}) }, body: bytes.subarray(range.start, range.end + 1) });
+  });
+  const page = await context.newPage(), errors = [];
+  debugPage = page;
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => { if (message.text().startsWith('Fullscreen request failed:')) console.log(message.text()); });
+  await page.goto(base);
+  const region = page.getByRole('region', { name: `Видео: ${info.originalName}`, exact: true });
+  await region.waitFor();
+  const preview = region.locator('button video');
+  await until(() => preview.count(), 'visible preview');
+  await until(() => preview.evaluate((video) => video.muted && !video.controls && !video.paused && video.currentTime > 0), 'silent animated preview');
+  assert.equal(await region.getByRole('slider').count(), 0);
+  assert(await region.evaluate((section) => parseFloat(section.parentElement.style.padding) === 0 && section.parentElement.style.background === 'transparent'));
+  assert.equal(await region.getByText('Без звука', { exact: true }).count(), 0);
+  await region.getByRole('button', { name: `Открыть видео ${info.originalName}`, exact: true }).click();
+  const viewer = page.getByRole('dialog', { name: `Просмотр видео: ${info.originalName}`, exact: true });
+  const video = viewer.locator('video');
+  await until(() => video.evaluate((element) => !element.paused && element.currentTime > 0), 'viewer playing');
+  assert(await preview.evaluate((element) => element.paused && element.muted));
+  const bounds = await viewer.boundingBox(); assert.equal(bounds.width, 1100); assert.equal(bounds.height, 850);
+  const surface = viewer.locator('[data-video-viewer-surface]');
+  const edgeBounds = await video.boundingBox();
+  assert.equal(edgeBounds.x, 0); assert.equal(edgeBounds.y, 0); assert.equal(edgeBounds.width, 1100); assert.equal(edgeBounds.height, 850);
+  assert.equal(await surface.evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(0, 0, 0)');
+  await page.mouse.move(500, 250);
+  await until(() => surface.getAttribute('data-controls-visible').then((value) => value === 'false'), 'controls hide when idle');
+  await until(() => viewer.getByRole('slider', { name: 'Позиция видео', exact: true, includeHidden: true }).evaluate((element) => getComputedStyle(element.parentElement.parentElement).visibility === 'hidden'), 'toolbar fades out');
+  await page.keyboard.press('Space');
+  assert(await video.evaluate((element) => element.paused), 'Space pauses with hidden controls');
+  assert.equal(await viewer.count(), 1, 'Space must not activate the close button');
+  await page.keyboard.press('Space');
+  await until(() => video.evaluate((element) => !element.paused), 'Space resumes');
+  await page.keyboard.down('Space');
+  await page.keyboard.down('Space');
+  assert(await video.evaluate((element) => element.paused), 'held Space toggles only once');
+  await page.keyboard.up('Space');
+  await page.keyboard.press('Space');
+  await until(() => surface.getAttribute('data-controls-visible').then((value) => value === 'false'), 'controls hide after resumed playback');
+  await page.keyboard.press('Tab');
+  await until(() => surface.getAttribute('data-controls-visible').then((value) => value === 'true'), 'keyboard reveals controls');
+  assert(await page.evaluate(() => document.hasFocus() && document.querySelector('dialog').contains(document.activeElement)), 'Tab must keep focus inside viewer');
+  await page.mouse.move(550, 810);
+
+  assert(await video.evaluate((element) => element.getBoundingClientRect().width > 900));
+  const pauseBounds = await viewer.getByRole('button', { name: 'Пауза видео', exact: true }).boundingBox();
+  assert(Math.abs(pauseBounds.x + pauseBounds.width / 2 - 550) < 2, 'Play/Pause not centered');
+  const volumeBounds = await viewer.getByRole('slider', { name: 'Громкость видео', exact: true }).boundingBox();
+  const fullscreenBounds = await viewer.getByRole('button', { name: 'Полноэкранный просмотр', exact: true }).boundingBox();
+  assert(volumeBounds.x < pauseBounds.x && fullscreenBounds.x > pauseBounds.x);
+  await viewer.getByRole('button', { name: 'Полноэкранный просмотр', exact: true }).click();
+  await until(() => page.evaluate(() => !!document.fullscreenElement), 'native fullscreen enters');
+  assert(await page.evaluate(() => {
+    const surface = document.fullscreenElement;
+    const media = surface?.querySelector('video');
+    if (!surface?.hasAttribute('data-video-viewer-surface') || !media) return false;
+    const box = media.getBoundingClientRect();
+    const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+    return box.width > 500 && box.height > 200 && hit === media;
+  }), 'fullscreen must visibly show video, not chat behind dialog');
+  await page.screenshot({ path: '/private/tmp/mediachat-video-fullscreen.png' });
+
+  await viewer.getByRole('button', { name: 'Выйти из полноэкранного режима', exact: true }).click();
+  await until(() => page.evaluate(() => !document.fullscreenElement), 'native fullscreen exits');
+  await viewer.getByRole('button', { name: 'Пауза видео', exact: true }).click();
+  await video.evaluate((element) => { element.currentTime = 0; });
+  await page.keyboard.press('ArrowRight');
+  assert(await video.evaluate((element) => Math.abs(element.currentTime - 15) < .3), 'ArrowRight seeks +15 seconds');
+  await page.keyboard.press('ArrowLeft');
+  assert(await video.evaluate((element) => element.currentTime < .3), 'ArrowLeft seeks -15 seconds');
+  await page.keyboard.press('ArrowLeft');
+  assert(await video.evaluate((element) => element.currentTime >= 0), 'ArrowLeft clamps at start');
+  await video.evaluate((element) => { element.currentTime = element.duration - 2; });
+  await page.keyboard.press('ArrowRight');
+  assert(await video.evaluate((element) => element.currentTime <= element.duration && element.currentTime > element.duration - .3), 'ArrowRight clamps at end');
+  await video.evaluate((element) => { element.currentTime = 0; });
+
+  await viewer.getByRole('button', { name: 'Видео вперёд на 15 секунд', exact: true }).click();
+  assert(await video.evaluate((element) => Math.abs(element.currentTime - 15) < .3));
+  await viewer.getByRole('button', { name: 'Видео назад на 15 секунд', exact: true }).click();
+  assert(await video.evaluate((element) => element.currentTime < .3));
+  await page.screenshot({ path: '/private/tmp/mediachat-video-viewer.png' });
+  await page.keyboard.press('Escape'); assert.equal(await page.getByRole('dialog').count(), 0);
+  await until(() => preview.evaluate((element) => !element.paused && element.muted), 'preview resumes muted');
+  assert(await region.getByRole('button').evaluate((button) => document.activeElement === button));
+  await region.getByRole('button').click();
+  await viewer.getByRole('button', { name: 'Остановить и закрыть видео', exact: true }).click();
+  assert.equal(await page.getByRole('dialog').count(), 0);
+  await region.getByRole('button').click();
+  await viewer.click({ position: { x: 2, y: 2 } }); assert.equal(await page.getByRole('dialog').count(), 0);
+  await page.setViewportSize({ width: 1400, height: 700 });
+  await region.getByRole('button').click();
+  await viewer.getByRole('button', { name: 'Полноэкранный просмотр', exact: true }).click();
+  await until(() => page.evaluate(() => !!document.fullscreenElement), 'fullscreen before side close');
+  await until(() => video.evaluate((element) => element.readyState >= 2), 'video metadata before side click');
+  const imageAndSide = await video.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const scale = Math.min(box.width / element.videoWidth, box.height / element.videoHeight);
+    const sideWidth = (box.width - element.videoWidth * scale) / 2;
+    return { centerX: box.x + box.width / 2, centerY: box.y + box.height / 2, sideX: box.x + 2, sideWidth };
+  });
+  assert(imageAndSide.sideWidth > 10, 'fixture must have side letterboxing');
+  await page.mouse.click(imageAndSide.centerX, imageAndSide.centerY);
+  assert.equal(await viewer.count(), 1, 'click on video content must not close');
+  await page.mouse.click(imageAndSide.sideX, imageAndSide.centerY);
+  assert.equal(await viewer.count(), 0, 'click on side must close viewer');
+  await until(() => page.evaluate(() => !document.fullscreenElement), 'closing by side also exits fullscreen');
+  await page.setViewportSize({ width: 390, height: 700 });
+  await region.getByRole('button').click();
+  const mobile = await viewer.boundingBox(); assert.equal(mobile.width, 390); assert.equal(mobile.height, 700);
+  assert(await viewer.evaluate((element) => element.scrollWidth <= element.clientWidth));
+  await page.keyboard.press('Escape');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await until(() => preview.evaluate((element) => element.paused), 'reduced motion pauses preview');
+  assert.equal(errors.length, 0, errors.join('\n'));
+  console.log('PASS: unframed video, speaker icon, silent autoplay, centered Play and +/-15, fullscreen surface and visible video after enter/exit, silent preview, black edge-to-edge video, 2s idle controls, Space play/pause, ArrowLeft/Right +/-15 and boundary clamps, repeat-key guard, keyboard access, side click closes fullscreen and center click stays open, close/focus return, 390px layout, reduced motion, no page errors');
+} finally { await browser?.close(); await db.close(); await rm(root, { recursive: true, force: true }); }

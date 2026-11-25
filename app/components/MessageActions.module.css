@@ -1,0 +1,38 @@
+.target { -webkit-touch-callout: none; scroll-margin: 24px; border-radius: 12px; }
+.target:focus-visible { outline: 2px solid #ad91ff; outline-offset: 4px; }
+.highlight { animation: messageHighlight 1.6s ease-out; }
+.menu { position: fixed; z-index: 12000; width: 208px; max-width: calc(100vw - 16px); padding: 6px; border: 1px solid #434052; border-radius: 14px; background: #222530; color: #f4f2fc; box-shadow: 0 12px 48px #0008; animation: menuIn 140ms ease-out both; }
+.menu button { display: flex; gap: 12px; align-items: center; width: 100%; border: 0; border-radius: 9px; background: transparent; color: inherit; font-size: 14px; text-align: left; padding: 12px; cursor: pointer; }
+.menu button:hover, .menu button:focus-visible { background: #6753dc40; outline: none; }
+.menu button:disabled { opacity: .4; cursor: default; }
+.closing { pointer-events: none; animation: menuOut 120ms ease-in both; }
+.quote { display: flex; flex-direction: column; gap: 3px; min-width: 0; width: 100%; padding: 8px 10px; margin: 0 0 8px; border: 0; border-left: 3px solid #ad91ff; border-radius: 6px; background: #0002; color: inherit; text-align: left; cursor: pointer; }
+.quote strong { color: #d4c6ff; font-size: 12px; }
+.quote span { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.quote:focus-visible { outline: 2px solid #ad91ff; }
+.composerCard { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: #252735; border-left: 3px solid #ad91ff; }
+.composerCard .quote { margin: 0; padding: 0; border: 0; background: none; }
+.cancel { background: transparent; border: 0; color: #dad3ef; padding: 8px; cursor: pointer; }
+.editor { padding: 10px; border-radius: 12px; background: #252735; border-left: 3px solid #ad91ff; }
+.editor label { display: block; font-size: 13px; color: #c9b8ff; margin-bottom: 8px; }
+.editor textarea { resize: vertical; min-height: 64px; max-height: 180px; width: 100%; padding: 10px; border: 1px solid #575064; border-radius: 8px; background: #191c26; color: white; font: inherit; }
+.editor button { padding: 8px 12px; border: 0; border-radius: 8px; background: #6753dc; color: white; cursor: pointer; margin: 8px 8px 0 0; }
+.editor button:disabled { opacity: .5; cursor: default; }
+.editor button[type=button] { background: #3d3c4c; }
+.toast { position: fixed; z-index: 13000; bottom: 90px; left: 50%; transform: translateX(-50%); padding: 10px 16px; border-radius: 12px; background: #302b46; color: white; box-shadow: 0 8px 30px #0005; max-width: 90vw; font-size: 14px; }
+@keyframes menuIn { from { opacity: 0; transform: translateY(4px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes menuOut { to { opacity: 0; transform: translateY(3px) scale(.98); } }
+@keyframes messageHighlight { from { background: #a58cff55; } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .menu, .closing, .highlight { animation-duration: 1ms; } }
+
+.menu .destructive { color: #ff929b; }
+.menu .destructive:hover, .menu .destructive:focus-visible { background: #a52d3e35; }
+.deleteDialog { padding: 22px; width: min(420px, calc(100vw - 32px)); border: 1px solid #484354; border-radius: 16px; background: #222530; color: #f4f2fc; box-shadow: 0 20px 70px #0008; }
+.deleteDialog::backdrop { background: #0009; }
+.deleteDialog h2 { margin: 0 0 12px; font-size: 19px; }
+.deleteDialog p { margin: 0; font-size: 14px; line-height: 1.5; color: #c5c1d2; }
+.deleteDialog footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.deleteDialog button { padding: 10px 14px; border: 0; border-radius: 9px; color: white; background: #414052; cursor: pointer; }
+.deleteDialog button[type=submit] { background: #a6374b; }
+.deleteDialog button:focus-visible { outline: 2px solid #ad91ff; outline-offset: 2px; }
+.deleteDialog button:disabled { opacity: .5; cursor: default; }

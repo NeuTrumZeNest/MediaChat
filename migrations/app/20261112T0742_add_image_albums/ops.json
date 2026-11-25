@@ -1,0 +1,245 @@
+[
+  {
+    "id": "table.messageImage",
+    "label": "Create table \"messageImage\"",
+    "summary": "Creates table \"messageImage\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "messageImage"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"messageImage\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"messageImage\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"messageImage\"",
+        "sql": "CREATE TABLE \"public\".\"messageImage\" (\n  \"id\" SERIAL NOT NULL,\n  \"imageUrl\" text NOT NULL,\n  \"messageId\" int4 NOT NULL,\n  \"position\" int4 NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"messageImage\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"messageImage\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.messageImage.messageImage_messageId_position_key",
+    "label": "Add unique constraint on \"messageImage\" (messageId, position)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "messageImage_messageId_position_key",
+        "table": "messageImage"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"messageImage_messageId_position_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "messageImage_messageId_position_key",
+          "public",
+          "\"public\".\"messageImage\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"messageImage_messageId_position_key\"",
+        "sql": "ALTER TABLE \"public\".\"messageImage\" ADD CONSTRAINT \"messageImage_messageId_position_key\" UNIQUE (\"messageId\", \"position\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"messageImage_messageId_position_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "messageImage_messageId_position_key",
+          "public",
+          "\"public\".\"messageImage\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.messageImage.messageImage_messageId_imageUrl_key",
+    "label": "Add unique constraint on \"messageImage\" (messageId, imageUrl)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "messageImage_messageId_imageUrl_key",
+        "table": "messageImage"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"messageImage_messageId_imageUrl_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "messageImage_messageId_imageUrl_key",
+          "public",
+          "\"public\".\"messageImage\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"messageImage_messageId_imageUrl_key\"",
+        "sql": "ALTER TABLE \"public\".\"messageImage\" ADD CONSTRAINT \"messageImage_messageId_imageUrl_key\" UNIQUE (\"messageId\", \"imageUrl\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"messageImage_messageId_imageUrl_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "messageImage_messageId_imageUrl_key",
+          "public",
+          "\"public\".\"messageImage\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.messageImage.messageImage_imageUrl_idx_735a24f0",
+    "label": "Create index \"messageImage_imageUrl_idx_735a24f0\" on \"messageImage\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "messageImage_imageUrl_idx_735a24f0",
+        "table": "messageImage"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"messageImage_imageUrl_idx_735a24f0\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"messageImage_imageUrl_idx_735a24f0\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"messageImage_imageUrl_idx_735a24f0\"",
+        "sql": "CREATE INDEX \"messageImage_imageUrl_idx_735a24f0\" ON \"public\".\"messageImage\" (\"imageUrl\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"messageImage_imageUrl_idx_735a24f0\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"messageImage_imageUrl_idx_735a24f0\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.messageImage.messageImage_messageId_idx_3cdded8d",
+    "label": "Create index \"messageImage_messageId_idx_3cdded8d\" on \"messageImage\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "messageImage_messageId_idx_3cdded8d",
+        "table": "messageImage"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"messageImage_messageId_idx_3cdded8d\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"messageImage_messageId_idx_3cdded8d\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"messageImage_messageId_idx_3cdded8d\"",
+        "sql": "CREATE INDEX \"messageImage_messageId_idx_3cdded8d\" ON \"public\".\"messageImage\" (\"messageId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"messageImage_messageId_idx_3cdded8d\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"messageImage_messageId_idx_3cdded8d\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.messageImage.messageImage_messageId_fkey",
+    "label": "Add foreign key \"messageImage_messageId_fkey\" on \"messageImage\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "messageImage_messageId_fkey",
+        "table": "messageImage"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"messageImage_messageId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "messageImage_messageId_fkey",
+          "public",
+          "\"public\".\"messageImage\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"messageImage_messageId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"messageImage\"\nADD CONSTRAINT \"messageImage_messageId_fkey\"\nFOREIGN KEY (\"messageId\")\nREFERENCES \"public\".\"message\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"messageImage_messageId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "messageImage_messageId_fkey",
+          "public",
+          "\"public\".\"messageImage\""
+        ]
+      }
+    ]
+  }
+]

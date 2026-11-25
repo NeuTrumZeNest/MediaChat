@@ -1,0 +1,11 @@
+@media (max-width: 700px) {
+  .sidebar { width: 76px !important; min-width: 76px !important; }
+  .brand { font-size: 0 !important; padding: 24px 0 20px !important; text-align: center; }
+  .brand::after { content: 'M'; font-size: 27px; }
+  .profile { padding: 14px 7px !important; }
+  .identity { justify-content: center; }
+  .details { display: none; }
+  .history { padding: 16px 10px !important; }
+  .composer { padding: 12px 8px !important; }
+  .header { padding: 0 12px !important; }
+}
