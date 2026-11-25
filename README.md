@@ -16,7 +16,7 @@ The application supports local development, LAN access, and temporary HTTPS demo
     <img src="docs/screenshots/overview.png" alt="MediaChat group conversation with shared audio, a video preview, and the audio player" width="640">
   </a>
   <br>
-  <em>Group messaging, media sharing, and audio playback.</em>
+  <em>Group messaging, media sharing, and audio playback</em>
 </p>
 
 ## Features
