@@ -161,7 +161,7 @@ Before a public release, remaining work includes trusted proxy/client-IP handlin
 | Direct messaging | Image viewer | Video player |
 | :---: | :---: | :---: |
 | [![Direct conversation with text and an image attachment](docs/screenshots/direct-messages.png)](docs/screenshots/direct-messages.png) | [![Image viewer with gallery navigation and download controls](docs/screenshots/image-viewer.png)](docs/screenshots/image-viewer.png) | [![Video player with timeline, volume, and 15-second seeking controls](docs/screenshots/video-player.jpg)](docs/screenshots/video-player.jpg) |
-| Text and image sharing. | Gallery navigation and original downloads. | Playback and 15-second seeking. |
+| Text and image sharing | Gallery navigation and original downloads | Playback and 15-second seeking |
 
 ### Mobile
 
@@ -170,12 +170,12 @@ Before a public release, remaining work includes trusted proxy/client-IP handlin
     <td align="center" width="50%">
       <a href="docs/screenshots/mobile-chat.jpg"><img src="docs/screenshots/mobile-chat.jpg" alt="MediaChat group conversation on a mobile screen" width="280"></a>
       <br>
-      <em>Group chat and media attachments.</em>
+      <em>Group chat and media attachments</em>
     </td>
     <td align="center" width="50%">
       <a href="docs/screenshots/mobile-video.jpg"><img src="docs/screenshots/mobile-video.jpg" alt="MediaChat video player on a mobile screen" width="280"></a>
       <br>
-      <em>Video playback with touch controls.</em>
+      <em>Video playback with touch controls</em>
     </td>
   </tr>
 </table>
